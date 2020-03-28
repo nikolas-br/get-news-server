@@ -1,15 +1,17 @@
-// import "dotenv/config"; // alwas has to be declared first
+import "dotenv/config"; // alwas has to be declared first
 import express from "express";
 import cors from "cors";
 import Feed from "rss-to-json";
+
+let port = process.env.PORT || 80;
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 // app.use(express.urlencoded({ extended: true }));
 
-app.listen(3000);
-console.log("Listening on port " + 3000);
+app.listen(port);
+console.log("Listening on port " + port);
 
 app.post("/get", async (req, res) => {
   console.log("Post request for: ", req.body.url);
