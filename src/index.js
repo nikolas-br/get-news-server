@@ -1,4 +1,4 @@
-import "dotenv/config"; // alwas has to be declared first
+// import "dotenv/config"; // alwas has to be declared first
 import express from "express";
 import cors from "cors";
 import Feed from "rss-to-json";
