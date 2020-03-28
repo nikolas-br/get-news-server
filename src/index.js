@@ -106,7 +106,7 @@ const parseFeed = (jsonFeed, url) => {
           avatarThumbnail: avatarThumbnail,
           // avatarText: avatarName,
           rootTitle: jsonFeed["title"],
-          // rootLink: jsonFeed["url"].match(/www/),
+          rootLink: url,
           isRead: false
         }
       ];
