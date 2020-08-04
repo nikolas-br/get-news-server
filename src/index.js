@@ -1,7 +1,9 @@
 import "dotenv/config"; // alwas has to be declared first
-import express from "express";
+import express, { json } from "express";
 import cors from "cors";
 import Feed from "rss-to-json";
+import { getArticle } from "./readability";
+const { JSDOM } = require("jsdom");
 
 let port = process.env.PORT || 80;
 
@@ -22,14 +24,16 @@ app.post("/get", async (req, res) => {
     res.send("Not allowed");
     return;
   }
-  if (req.body.data.filter(element => element.length === 0).length > 0) {
+  if (req.body.data.filter((element) => element.length === 0).length > 0) {
     res.send("Not allowed");
     return;
   }
 
-  getFeeds(req.body.data).then(feeds => {
+  getFeeds(req.body.data).then((feeds) => {
     let consolidatedFeed = [];
-    feeds.forEach(feed => (consolidatedFeed = [...consolidatedFeed, ...feed]));
+    feeds.forEach(
+      (feed) => (consolidatedFeed = [...consolidatedFeed, ...feed])
+    );
     sortFeed(consolidatedFeed);
     console.log("Entries retrieved: ", consolidatedFeed.length);
 
@@ -39,7 +43,33 @@ app.post("/get", async (req, res) => {
 
 //////////////////////////////////////////////////////////////////////
 
-const getFeeds = async feeds => {
+// Readability feature, sends parsed article to client
+// Request: {"data": {"link": "URL"}}
+app.post("/getStory", async (req, res) => {
+  console.log("/getStory request for: ", req.body.data);
+
+  if (typeof req.body.data === "undefined") {
+    res.send("Not allowed");
+    return;
+  }
+  if (typeof req.body.data.link !== "string") {
+    res.send("Not allowed, has to be a string");
+    return;
+  }
+
+  getArticle(req.body.data.link)
+    .then((article) => {
+      res.send(article);
+    })
+    .catch((error) => {
+      console.error(error);
+      res.send("Error getting article");
+    });
+});
+
+//////////////////////////////////////////////////////////////////////
+
+const getFeeds = async (feeds) => {
   let promises = [];
 
   for (let feedObj of feeds) promises.push(getFeed(feedObj));
@@ -47,7 +77,7 @@ const getFeeds = async feeds => {
   return Promise.all(promises);
 };
 
-const getFeed = async feedObj => {
+const getFeed = async (feedObj) => {
   let promise = new Promise((resolve, reject) => {
     Feed.load(feedObj.link, (error, json) => {
       if (error != null) {
@@ -76,7 +106,12 @@ const parseFeed = (jsonFeed, feedObj) => {
       }
 
       //Filter out description of items if they contain meta data
-      if (newEntry.description.includes("<")) newEntry.description = "";
+      if (newEntry.description.includes("<")) {
+        const regexResult = newEntry.description.match(/<p>(?<p>.*)<\/p>/im);
+
+        if (regexResult.groups.p) newEntry.description = regexResult.groups.p;
+        else newEntry.description = "";
+      }
       //Change date to more readable format
       const date = new Date(newEntry.pubDate);
       newEntry.pubDate = date.toLocaleString("en-US", {
@@ -85,7 +120,7 @@ const parseFeed = (jsonFeed, feedObj) => {
         month: "long",
         day: "numeric",
         hour: "2-digit",
-        minute: "2-digit"
+        minute: "2-digit",
       });
 
       //Add new item to array of stories, add values for app functions
@@ -98,8 +133,8 @@ const parseFeed = (jsonFeed, feedObj) => {
           avatarText: feedObj.avatarText,
           rootTitle: jsonFeed["title"],
           rootLink: feedObj.link,
-          isRead: false
-        }
+          isRead: false,
+        },
       ];
     }
   }
@@ -107,6 +142,6 @@ const parseFeed = (jsonFeed, feedObj) => {
   return newEntries;
 };
 
-const sortFeed = feed => {
+const sortFeed = (feed) => {
   feed.sort((a, b) => (Date.parse(a.pubDate) < Date.parse(b.pubDate) ? 1 : -1));
 };
