@@ -1,11 +1,14 @@
 import "dotenv/config"; // alwas has to be declared first
 import express, { json } from "express";
 import cors from "cors";
-import Feed from "rss-to-json";
+// import Feed from "rss-to-json";
+let Parser = require("rss-parser");
 import { getArticle } from "./readability";
 const { JSDOM } = require("jsdom");
+const fs = require("fs");
 
 let port = process.env.PORT || 80;
+let rssSourcesList = [];
 
 const app = express();
 app.use(cors());
@@ -13,6 +16,28 @@ app.use(express.json());
 
 app.listen(port);
 console.log("Listening on port " + port);
+
+// Read json file with rss sources
+fs.readFile(
+  "/Users/Nikolas 1/Downloads/JavaScript/got-news-server/src/rssSources.json",
+  "utf8",
+  (err, jsonString) => {
+    if (err) {
+      console.log("Error reading file from disk:", err);
+      return;
+    }
+    try {
+      rssSourcesList = JSON.parse(jsonString);
+      console.log("RSS sources loaded");
+    } catch (err) {
+      console.log("Error parsing JSON string:", err);
+    }
+  }
+);
+
+//////////////////////////////////////////////////////////////////////
+// Get feeds
+// Request:
 
 app.post("/get", async (req, res) => {
   console.log("Post request for: ", req.body.data);
@@ -42,7 +67,77 @@ app.post("/get", async (req, res) => {
 });
 
 //////////////////////////////////////////////////////////////////////
+// Search feature
+// Request: { data: {search: searchTerm, page: 0} };
+// If page: -1 and the result needs to be paginated, the first page is sent
+// Reponse: {data: [], totalPages: 0}
+// If totalPages: 0, all results have been transmitted
 
+app.post("/search", (req, res) => {
+  const ELEMENTS_PER_PAGE = 10;
+
+  if (typeof req.body.data.search !== "string") {
+    res.send("Not allowed, search terms have to be a string");
+    return;
+  }
+  if (typeof req.body.data.page !== "number") {
+    res.send("Not allowed, page has to be a number");
+    return;
+  }
+
+  const searchTerms = req.body.data.search;
+  const page = req.body.data.page;
+  console.log("/search request for: ", searchTerms, page);
+
+  const filtered = searchFeeds(searchTerms);
+
+  if (!filtered.length) {
+    res.send({ data: [], totalPages: 0 });
+    return;
+  }
+
+  // Check if pagination is needed
+  const totalPages = Math.ceil(filtered.length / ELEMENTS_PER_PAGE);
+
+  if (totalPages === 1) {
+    res.send({ data: filtered, totalPages: 0 });
+    return;
+  }
+
+  // Is the requested page number valid?
+  if (page > totalPages) {
+    res.send("Invalid page number");
+    return;
+  }
+
+  const section = filtered.slice(
+    ELEMENTS_PER_PAGE * page,
+    ELEMENTS_PER_PAGE * (page + 1)
+  );
+  res.send({ data: section, totalPages });
+});
+
+const searchFeeds = (searchTerms) => {
+  if (searchTerms.length < 3) return [];
+
+  searchTerms = searchTerms
+    .trim()
+    .split(/\s+/)
+    .filter((e) => e.length >= 2);
+
+  return rssSourcesList.filter((e) => {
+    const searchField = e.title + e.description + e.link;
+
+    for (let term of searchTerms) {
+      const regex = new RegExp(term, "ig");
+      if (!regex.test(searchField)) return false;
+    }
+    return true;
+  });
+};
+
+//////////////////////////////////////////////////////////////////////
+//          BETA FEATURE
 // Readability feature, sends parsed article to client
 // Request: {"data": {"link": "URL"}}
 app.post("/getStory", async (req, res) => {
@@ -69,6 +164,8 @@ app.post("/getStory", async (req, res) => {
 
 //////////////////////////////////////////////////////////////////////
 
+const rssGetter = new Parser({ timeout: 2000 });
+
 const getFeeds = async (feeds) => {
   let promises = [];
 
@@ -78,20 +175,37 @@ const getFeeds = async (feeds) => {
 };
 
 const getFeed = async (feedObj) => {
-  let promise = new Promise((resolve, reject) => {
-    Feed.load(feedObj.link, (error, json) => {
-      if (error != null) {
-        console.error("Error getting feed: ", feedObj.link);
+  // Output of parseURL() below, which is then extracted by parseFeed()
+  // feedUrl: 'https://www.reddit.com/.rss'
+  // title: 'reddit: the front page of the internet'
+  // description: ""
+  // link: 'https://www.reddit.com/'
+  // items:
+  //     - title: 'The water is too deep, so he improvises'
+  //       link: 'https://www.reddit.com/r/funny/comments/3skxqc/the_water_is_too_deep_so_he_improvises/'
+  //       pubDate: 'Thu, 12 Nov 2015 21:16:39 +0000'
+  //       creator: "John Doe"
+  //       content: '<a href="http://example.com">this is a link</a> &amp; <b>this is bold text</b>'
+  //       contentSnippet: 'this is a link & this is bold text'
+  //       guid: 'https://www.reddit.com/r/funny/comments/3skxqc/the_water_is_too_deep_so_he_improvises/'
+  //       categories:
+  //           - funny
+  //       isoDate: '2015-11-12T21:16:39.000Z'
+
+  return new Promise((resolve, _) => {
+    rssGetter.parseURL(feedObj.link, (err, res) => {
+      if (err) {
         resolve([]);
-      } else resolve(parseFeed(json, feedObj));
+      } else resolve(parseFeed(res, feedObj));
     });
   });
-
-  return promise;
 };
 
 const parseFeed = (jsonFeed, feedObj) => {
   let newEntries = [];
+
+  // Limit number of items
+  jsonFeed.items = jsonFeed.items.slice(0, 500);
 
   const itemKeys = ["title", "description", "link", "pubDate", "category"];
 
@@ -105,13 +219,6 @@ const parseFeed = (jsonFeed, feedObj) => {
         else newEntry = { ...newEntry, [itmKey]: item[itmKey] };
       }
 
-      //Filter out description of items if they contain meta data
-      if (newEntry.description.includes("<")) {
-        const regexResult = newEntry.description.match(/<p>(?<p>.*)<\/p>/im);
-
-        if (regexResult.groups.p) newEntry.description = regexResult.groups.p;
-        else newEntry.description = "";
-      }
       //Change date to more readable format
       const date = new Date(newEntry.pubDate);
       newEntry.pubDate = date.toLocaleString("en-US", {

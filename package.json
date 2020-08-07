@@ -30,6 +30,7 @@
     "express": "^4.17.1",
     "jsdom": "^16.3.0",
     "node-readability": "^3.0.0",
+    "rss-parser": "^3.9.0",
     "rss-to-json": "^1.0.5"
   }
 }
