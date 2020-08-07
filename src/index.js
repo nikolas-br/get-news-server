@@ -6,6 +6,7 @@ let Parser = require("rss-parser");
 import { getArticle } from "./readability";
 const { JSDOM } = require("jsdom");
 const fs = require("fs");
+const path = require("path");
 
 let port = process.env.PORT || 80;
 let rssSourcesList = [];
@@ -19,7 +20,7 @@ console.log("Listening on port " + port);
 
 // Read json file with rss sources
 fs.readFile(
-  "/Users/Nikolas 1/Downloads/JavaScript/got-news-server/src/rssSources.json",
+  path.resolve("src", "rssSources.json"),
   "utf8",
   (err, jsonString) => {
     if (err) {
