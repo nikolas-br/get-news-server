@@ -1,10 +1,8 @@
 import "dotenv/config"; // alwas has to be declared first
 import express, { json } from "express";
 import cors from "cors";
-// import Feed from "rss-to-json";
-let Parser = require("rss-parser");
+const Parser = require("rss-parser");
 import { getArticle } from "./readability";
-const { JSDOM } = require("jsdom");
 const fs = require("fs");
 const path = require("path");
 
