@@ -136,7 +136,6 @@ const searchFeeds = (searchTerms) => {
 };
 
 //////////////////////////////////////////////////////////////////////
-//          BETA FEATURE
 // Readability feature, sends parsed article to client
 // Request: {"data": {"link": "URL"}}
 app.post("/getStory", async (req, res) => {
