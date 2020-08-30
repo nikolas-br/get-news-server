@@ -137,20 +137,20 @@ const searchFeeds = (searchTerms) => {
 
 //////////////////////////////////////////////////////////////////////
 // Readability feature, sends parsed article to client
-// Request: {"data": {"link": "URL"}}
-app.post("/getStory", async (req, res) => {
-  console.log("/getStory request for: ", req.body.data);
+// /getStory?page=URLtoArticle
+app.get("/getStory", async (req, res) => {
+  console.log("/getStory request");
 
-  if (typeof req.body.data === "undefined") {
+  if (typeof req.query.page === "undefined") {
     res.send("Not allowed");
     return;
   }
-  if (typeof req.body.data.link !== "string") {
+  if (typeof req.query.page !== "string") {
     res.send("Not allowed, has to be a string");
     return;
   }
 
-  getArticle(req.body.data.link)
+  getArticle(req.query.page)
     .then((article) => {
       res.send(article);
     })
